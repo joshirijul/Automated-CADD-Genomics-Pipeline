@@ -1,0 +1,18 @@
+# AutoDock Vina Configuration File — BACE1 (1FKN)
+receptor = receptor_clean.pdbqt
+ligand = donepezil.pdbqt
+
+out = docking_pose_out.pdbqt
+log = docking_log.txt
+
+center_x = 26.288000106811523
+center_y = 18.054000854492188
+center_z = 20.756000518798828
+
+size_x = 22.0
+size_y = 22.0
+size_z = 22.0
+
+exhaustiveness = 8
+num_modes = 9
+energy_range = 3
