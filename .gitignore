@@ -1,0 +1,14 @@
+# Environments & Cache
+__pycache__/
+*.pyc
+*.pyo
+.conda/
+env/
+venv/
+.vscode/
+
+# Large Simulation & Temporary Files (We will track clean outputs instead)
+*.trr
+*.xtc
+*.log
+# Do not ignore .pdb or .fasta for our core targets
