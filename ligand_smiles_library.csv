@@ -1,0 +1,4 @@
+File_Name,Molecule_Name,Canonical_SMILES,Heavy_Atoms,Molecular_Weight
+IBP_ideal.sdf,IBP,CC(C)Cc1ccc([C@H](C)C(=O)O)cc1,15,206.28
+aspirin.sdf,2244,CC(=O)Oc1ccccc1C(=O)O,13,180.16
+donepezil.mol,3152,COc1cc2c(cc1OC)C(=O)[C@H](CC1CCN(Cc3ccccc3)CC1)C2,28,379.5
