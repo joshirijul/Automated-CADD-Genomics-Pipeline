@@ -1,0 +1,2 @@
+; GROMACS AMBER99SB-ILDN Topology for Solvated BACE1 (1FKN)
+#include "amber99sb-ildn.ff/forcefield.itp"
