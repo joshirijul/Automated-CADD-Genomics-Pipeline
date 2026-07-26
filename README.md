@@ -22,3 +22,15 @@ An automated, deterministic, end-to-end computational biology and computer-aided
 │   └── reports/             # Curated QSAR datasets, chemical screening CSVs, and publication graphics
 ├── environment.yml          # Self-contained Conda environment dependencies
 └── README.md                # Pipeline documentation
+---
+
+## 💻 Full-Stack Interactive Web Dashboard (`app.py`)
+
+To make this pipeline accessible to clinicians and bench biologists without command-line experience, the backend scripts are wrapped in a reactive **Streamlit** web application featuring 3D macromolecular rendering via **py3Dmol**.
+
+### Key Features:
+* **🏛️ 3D Active Site Viewer:** Interactive rotation, zooming, and surface topography rendering of target protein complexes directly in the browser.
+* **💊 Real-Time ADME Screening:** Dynamic sliders to filter uploaded chemical libraries by Lipinski's Rule of 5 and Veber's drug-likeness criteria on the fly.
+* **📈 Automated QSAR Regression:** Trains OLS regression models on benchmark datasets in real time, projecting predicted $pIC_{50}$ bioactivity scores for uploaded workspace molecules.
+
+**Launch the Dashboard Locally:**
