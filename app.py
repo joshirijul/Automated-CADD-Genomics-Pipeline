@@ -83,46 +83,79 @@ def parse_uploaded_ligands(uploaded_file):
     return pd.DataFrame(records)
 
 def fetch_from_pubchem(drug_names_str):
-    """Queries NIH PubChem REST API with automated AI spellcheck and typo-correction fallback."""
+    """
+    Queries chemical structures using a 3-Tier Fault-Tolerant Architecture:
+    1. Instant Local Reference Cache (Bypasses network latency & cloud IP rate limits)
+    2. Live PubChem REST API (With NCBI-compliant academic headers)
+    3. AI Spellcheck & Typo-Correction Fallback
+    """
+    # TIER 1: Built-in reference library for benchmark therapeutics & demo queries
+    BENCHMARK_SMILES = {
+        "aspirin": "CC(=O)OC1=CC=CC=C1C(=O)O",
+        "ibuprofen": "CC(C)CC1=CC=C(C=C1)C(C)C(=O)O",
+        "donepezil": "COC1=C(C=C2C(=C1)CC(C2=O)CC3CCN(CC3)CC4=CC=CC=C4)OC",
+        "caffeine": "CN1C=NC2=C1C(=O)N(C(=O)N2C)C",
+        "acetaminophen": "CC(=O)NC1=CC=C(O)C=C1",
+        "paracetamol": "CC(=O)NC1=CC=C(O)C=C1",
+        "metformin": "CN(C)C(=N)NC(=N)N",
+        "lipitor": "CC(C)C1=C(C(=C(N1CC[C@H](C[C@H](CC(=O)O)O)O)C2=CC=C(C=C2)F)C3=CC=CC=C3)C(=O)NC4=CC=CC=C4",
+        "atorvastatin": "CC(C)C1=C(C(=C(N1CC[C@H](C[C@H](CC(=O)O)O)O)C2=CC=C(C=C2)F)C3=CC=CC=C3)C(=O)NC4=CC=CC=C4",
+        "omeprazole": "CC1=CN=C(C(=C1OC)C)CS(=O)C2=NC3=C(N2)C=C(C=C3)OC"
+    }
+
     names = [n.strip() for n in drug_names_str.split(",") if n.strip()]
     records = []
+    
+    # NCBI-compliant header to prevent datacenter IP blocking
+    headers = {'User-Agent': 'CADD-Virtual-Screening-App/2.0 (Academic Research; mailto:lab@university.edu)'}
+    
     for name in names:
+        clean_name = name.lower()
+        
+        # TIER 1 CHECK: Instant local resolve
+        if clean_name in BENCHMARK_SMILES:
+            records.append({"Molecule_Name": name.capitalize(), "Canonical_SMILES": BENCHMARK_SMILES[clean_name]})
+            continue
+            
+        # TIER 2 CHECK: Live PubChem REST API
         encoded_name = urllib.parse.quote(name)
         try:
-            # Attempt 1: Direct Exact Name Query
             url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/property/CanonicalSMILES/JSON"
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req) as response:
                 data = json.loads(response.read().decode())
                 smiles = data['PropertyTable']['Properties'][0]['CanonicalSMILES']
                 records.append({"Molecule_Name": name.capitalize(), "Canonical_SMILES": smiles})
         except Exception:
-            # Attempt 2: Auto-Spellcheck Fallback for "Average Joe" typos!
+            # TIER 3 CHECK: Auto-Spellcheck Fallback for typos
             try:
                 spell_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/spell/suggest/{encoded_name}/JSON"
-                req_spell = urllib.request.Request(spell_url, headers={'User-Agent': 'Mozilla/5.0'})
+                req_spell = urllib.request.Request(spell_url, headers=headers)
                 with urllib.request.urlopen(req_spell) as spell_resp:
                     spell_data = json.loads(spell_resp.read().decode())
                     suggestions = spell_data.get('Dictionary_Suggest_01', {}).get('SuggestionList', {}).get('Suggestion', [])
                     
                     if suggestions:
-                        corrected_name = suggestions[0]
-                        st.toast(f"🪄 Auto-corrected typo '{name}' ➔ '{corrected_name}'!", icon="💡")
-                        
-                        # Retry structure fetch using the corrected chemical name
-                        enc_correct = urllib.parse.quote(corrected_name)
-                        url_retry = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{enc_correct}/property/CanonicalSMILES/JSON"
-                        req_retry = urllib.request.Request(url_retry, headers={'User-Agent': 'Mozilla/5.0'})
-                        with urllib.request.urlopen(req_retry) as retry_resp:
-                            retry_data = json.loads(retry_resp.read().decode())
-                            smiles = retry_data['PropertyTable']['Properties'][0]['CanonicalSMILES']
-                            records.append({"Molecule_Name": f"{corrected_name.capitalize()} (Auto-corrected)", "Canonical_SMILES": smiles})
+                        corrected = suggestions[0]
+                        # Check local dict again for corrected word
+                        if corrected.lower() in BENCHMARK_SMILES:
+                            st.toast(f"🪄 Auto-corrected typo '{name}' ➔ '{corrected}'!", icon="💡")
+                            records.append({"Molecule_Name": f"{corrected.capitalize()} (Auto-corrected)", "Canonical_SMILES": BENCHMARK_SMILES[corrected.lower()]})
+                        else:
+                            enc_correct = urllib.parse.quote(corrected)
+                            url_retry = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{enc_correct}/property/CanonicalSMILES/JSON"
+                            req_retry = urllib.request.Request(url_retry, headers=headers)
+                            with urllib.request.urlopen(req_retry) as retry_resp:
+                                retry_data = json.loads(retry_resp.read().decode())
+                                smiles = retry_data['PropertyTable']['Properties'][0]['CanonicalSMILES']
+                                st.toast(f"🪄 Auto-corrected typo '{name}' ➔ '{corrected}'!", icon="💡")
+                                records.append({"Molecule_Name": f"{corrected.capitalize()} (Auto-corrected)", "Canonical_SMILES": smiles})
                     else:
-                        st.sidebar.error(f"❌ Could not resolve chemical structure for '{name}' on PubChem.")
+                        st.sidebar.error(f"❌ Could not resolve '{name}' on PubChem (Compound not found).")
             except Exception:
-                st.sidebar.error(f"❌ Could not resolve chemical structure for '{name}' on PubChem.")
+                st.sidebar.error(f"❌ Could not resolve '{name}'. Note: External API rate limits may apply on cloud servers.")
+                
     return pd.DataFrame(records)
-
 def render_3d_pdb(pdb_string, style="cartoon", color_by="spectrum"):
     """Renders an interactive 3D molecular viewer using py3Dmol."""
     view = py3Dmol.view(width=800, height=500)
