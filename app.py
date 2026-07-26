@@ -5,41 +5,21 @@ import urllib.parse
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Lipinski
 import py3Dmol
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="CADD Virtual Screening Engine",
+    page_title="CADD Pre-Processing & Curation Workbench",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # --- BACKEND LOGIC & DATA LOADERS ---
-@st.cache_data
-def get_training_data():
-    """Returns the benchmark BACE1 training set for QSAR modeling."""
-    data = [
-        {"Name": "BACE_Inh_1", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)C#N)F", "pIC50": 7.82},
-        {"Name": "BACE_Inh_2", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)C(=O)N)c4cncnc4", "pIC50": 8.15},
-        {"Name": "BACE_Inh_3", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)OC)c4cccnc4", "pIC50": 7.40},
-        {"Name": "BACE_Inh_4", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)C(=O)NC)c4cncnc4", "pIC50": 8.30},
-        {"Name": "BACE_Inh_5", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)Cl)c4cncnc4", "pIC50": 7.10},
-        {"Name": "BACE_Inh_6", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)F)F", "pIC50": 6.50},
-        {"Name": "BACE_Inh_7", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)N(C)C)F", "pIC50": 6.85},
-        {"Name": "BACE_Inh_8", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)S(=O)(=O)C)c4cncnc4", "pIC50": 7.95},
-        {"Name": "BACE_Inh_9", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)C#N)c4cncnc4", "pIC50": 8.50},
-        {"Name": "BACE_Inh_10", "SMILES": "CC1(C)c2cc(cc(c2N=C1N)c3cncc(c3)C)F", "pIC50": 6.20}
-    ]
-    return pd.DataFrame(data)
-
 def calc_adme(smiles):
-    """Computes ADME descriptors and drug-likeness filters."""
+    """Computes ADME descriptors and drug-likeness filters for any chemical ligand."""
     mol = Chem.MolFromSmiles(smiles)
     if not mol: return None
     mw, logp = Descriptors.MolWt(mol), Descriptors.MolLogP(mol)
@@ -50,14 +30,13 @@ def calc_adme(smiles):
     return {"MolWt": round(mw, 2), "LogP": round(logp, 2), "HBD": hbd, "HBA": hba, "TPSA": round(tpsa, 2), "Lipinski_Violations": lip_viol, "Drug_Like": drug_like}
 
 def parse_uploaded_ligands(uploaded_file):
-    """Automatically parses CSV, SDF, MOL, or PDB files into a standardized SMILES DataFrame."""
+    """Parses CSV, SDF, MOL, or PDB ligand structure files into a standardized SMILES DataFrame."""
     filename = uploaded_file.name.lower()
     records = []
     
     if filename.endswith(".csv"):
         return pd.read_csv(uploaded_file)
         
-    # Write temp file for RDKit structure suppliers
     temp_path = f"temp_{filename}"
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getvalue())
@@ -84,12 +63,11 @@ def parse_uploaded_ligands(uploaded_file):
 
 def fetch_from_pubchem(drug_names_str):
     """
-    Queries chemical structures using a 3-Tier Fault-Tolerant Architecture:
-    1. Instant Local Reference Cache (Bypasses network latency & cloud IP rate limits)
-    2. Live PubChem REST API (With NCBI-compliant academic headers)
+    3-Tier Fault-Tolerant Chemical Structure Fetcher:
+    1. Instant Reference Cache (Bypasses cloud IP rate-limiting for common therapeutics)
+    2. Live PubChem REST API (NCBI academic research headers)
     3. AI Spellcheck & Typo-Correction Fallback
     """
-    # TIER 1: Built-in reference library for benchmark therapeutics & demo queries
     BENCHMARK_SMILES = {
         "aspirin": "CC(=O)OC1=CC=CC=C1C(=O)O",
         "ibuprofen": "CC(C)CC1=CC=C(C=C1)C(C)C(=O)O",
@@ -98,26 +76,21 @@ def fetch_from_pubchem(drug_names_str):
         "acetaminophen": "CC(=O)NC1=CC=C(O)C=C1",
         "paracetamol": "CC(=O)NC1=CC=C(O)C=C1",
         "metformin": "CN(C)C(=N)NC(=N)N",
-        "lipitor": "CC(C)C1=C(C(=C(N1CC[C@H](C[C@H](CC(=O)O)O)O)C2=CC=C(C=C2)F)C3=CC=CC=C3)C(=O)NC4=CC=CC=C4",
         "atorvastatin": "CC(C)C1=C(C(=C(N1CC[C@H](C[C@H](CC(=O)O)O)O)C2=CC=C(C=C2)F)C3=CC=CC=C3)C(=O)NC4=CC=CC=C4",
-        "omeprazole": "CC1=CN=C(C(=C1OC)C)CS(=O)C2=NC3=C(N2)C=C(C=C3)OC"
+        "omeprazole": "CC1=CN=C(C(=C1OC)C)CS(=O)C2=NC3=C(N2)C=C(C=C3)OC",
+        "imatinib": "CC1=C(C=C(C=C1)NC(=O)C2=CC=C(C=C2)CN3CCN(CC3)C)NC4=NC=CC(=N4)C5=CN=CC=C5"
     }
 
     names = [n.strip() for n in drug_names_str.split(",") if n.strip()]
     records = []
-    
-    # NCBI-compliant header to prevent datacenter IP blocking
-    headers = {'User-Agent': 'CADD-Virtual-Screening-App/2.0 (Academic Research; mailto:lab@university.edu)'}
+    headers = {'User-Agent': 'CADD-PreProcessing-Workbench/3.0 (Academic Research; mailto:lab@university.edu)'}
     
     for name in names:
         clean_name = name.lower()
-        
-        # TIER 1 CHECK: Instant local resolve
         if clean_name in BENCHMARK_SMILES:
             records.append({"Molecule_Name": name.capitalize(), "Canonical_SMILES": BENCHMARK_SMILES[clean_name]})
             continue
             
-        # TIER 2 CHECK: Live PubChem REST API
         encoded_name = urllib.parse.quote(name)
         try:
             url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/property/CanonicalSMILES/JSON"
@@ -127,7 +100,6 @@ def fetch_from_pubchem(drug_names_str):
                 smiles = data['PropertyTable']['Properties'][0]['CanonicalSMILES']
                 records.append({"Molecule_Name": name.capitalize(), "Canonical_SMILES": smiles})
         except Exception:
-            # TIER 3 CHECK: Auto-Spellcheck Fallback for typos
             try:
                 spell_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/spell/suggest/{encoded_name}/JSON"
                 req_spell = urllib.request.Request(spell_url, headers=headers)
@@ -137,7 +109,6 @@ def fetch_from_pubchem(drug_names_str):
                     
                     if suggestions:
                         corrected = suggestions[0]
-                        # Check local dict again for corrected word
                         if corrected.lower() in BENCHMARK_SMILES:
                             st.toast(f"🪄 Auto-corrected typo '{name}' ➔ '{corrected}'!", icon="💡")
                             records.append({"Molecule_Name": f"{corrected.capitalize()} (Auto-corrected)", "Canonical_SMILES": BENCHMARK_SMILES[corrected.lower()]})
@@ -156,9 +127,10 @@ def fetch_from_pubchem(drug_names_str):
                 st.sidebar.error(f"❌ Could not resolve '{name}'. Note: External API rate limits may apply on cloud servers.")
                 
     return pd.DataFrame(records)
+
 def render_3d_pdb(pdb_string, style="cartoon", color_by="spectrum"):
-    """Renders an interactive 3D molecular viewer using py3Dmol."""
-    view = py3Dmol.view(width=800, height=500)
+    """Renders an interactive 3D macromolecular viewer using py3Dmol."""
+    view = py3Dmol.view(width=800, height=520)
     view.addModel(pdb_string, "pdb")
     if style == "cartoon": view.setStyle({"cartoon": {"color": color_by}})
     elif style == "surface":
@@ -171,59 +143,53 @@ def render_3d_pdb(pdb_string, style="cartoon", color_by="spectrum"):
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
     st.title("⚙️ Input Pipeline")
-    demo_mode = st.toggle("🚀 Enable 1-Click Demo Mode (BACE1 Target)", value=True)
+    st.markdown("Load macromolecules and ligand libraries for pre-processing curation.")
     
     st.divider()
-    st.markdown("### 1. Target Receptor")
-    uploaded_pdb = st.file_uploader("Upload Target (.pdb)", type=["pdb"], disabled=demo_mode)
+    st.markdown("### 1. Target Macromolecule")
+    uploaded_pdb = st.file_uploader("Upload Structure (.pdb)", type=["pdb"], help="Upload any protein or receptor target for structural verification.")
     
-    # Resolve PDB input
     pdb_content = None
-    if demo_mode and os.path.exists("data/1fkn.pdb"):
-        with open("data/1fkn.pdb", "r") as f: pdb_content = f.read()
-    elif demo_mode and os.path.exists("1fkn.pdb"):
-        with open("1fkn.pdb", "r") as f: pdb_content = f.read()
-    elif uploaded_pdb is not None:
+    if uploaded_pdb is not None:
         pdb_content = uploaded_pdb.getvalue().decode("utf-8")
+    elif os.path.exists("data/1fkn.pdb"):
+        with open("data/1fkn.pdb", "r") as f: pdb_content = f.read()
+    elif os.path.exists("1fkn.pdb"):
+        with open("1fkn.pdb", "r") as f: pdb_content = f.read()
         
     st.divider()
-    st.markdown("### 2. Ligand Screening Library")
+    st.markdown("### 2. Ligand Curation Library")
     input_method = st.radio("Input Method:", ["PubChem Name Search (AI/REST)", "Upload Structure Files (.csv, .sdf, .mol)"])
     
     lib_df = None
     if input_method == "PubChem Name Search (AI/REST)":
-        default_drugs = "Aspirin, Ibuprofen, Donepezil, Caffeine, Acetaminophen" if demo_mode else ""
-        drug_input = st.text_area("Type drug or metabolite names (comma separated):", value=default_drugs, help="Our engine automatically queries NIH PubChem to fetch 3D chemical structures.")
+        drug_input = st.text_area("Type chemical names (comma separated):", value="Aspirin, Ibuprofen, Donepezil, Caffeine, Imatinib", help="Our engine automatically queries NIH PubChem with typo-correction to fetch 3D chemical structures.")
         if drug_input:
-            with st.spinner("Fetching live structures from PubChem..."):
+            with st.spinner("Fetching live chemical structures..."):
                 lib_df = fetch_from_pubchem(drug_input)
     else:
         uploaded_file = st.file_uploader("Upload Library (.csv, .sdf, .mol, .pdb)", type=["csv", "sdf", "mol", "pdb"])
         if uploaded_file is not None:
-            with st.spinner("Parsing chemical structures..."):
+            with st.spinner("Parsing chemical file formats..."):
                 lib_df = parse_uploaded_ligands(uploaded_file)
-        elif demo_mode and os.path.exists("results/reports/ligand_smiles_library.csv"):
-            lib_df = pd.read_csv("results/reports/ligand_smiles_library.csv")
-        elif demo_mode and os.path.exists("ligand_smiles_library.csv"):
-            lib_df = pd.read_csv("ligand_smiles_library.csv")
 
     st.divider()
-    st.markdown("### 📊 ADME Filter Settings")
+    st.markdown("### 📊 ADME Filter Criteria")
     max_lipinski = st.slider("Max Lipinski Violations", 0, 4, 1)
     filter_druglike = st.checkbox("Require Veber Drug-Likeness", value=True)
 
 # --- MAIN DASHBOARD AREA ---
-st.title("🧬 Structure-Based Drug Design & Virtual Screening Platform")
-st.markdown("An automated, full-stack computational biology engine. Convert chemical structures on the fly, screen for ADME-Tox drug-likeness, and predict target bioactivity via multivariate QSAR regression.")
+st.title("🧬 CADD Pre-Processing & Library Curation Workbench")
+st.markdown("""
+**A lightweight, browser-based gateway for computational drug discovery pipelines.**  
+Running 3D grid-search docking (AutoDock Vina) and thermodynamic simulations (GROMACS) requires intensive CPU compute that belongs in command-line automation. This interactive GUI serves as the essential pre-processing step: visually validate 3D receptor structures, standardize raw multi-format chemical libraries (.sdf, .mol), and apply ADME-Tox cheminformatics filters before exporting curated datasets to downstream command-line scripts.
+""")
 
-if demo_mode:
-    st.info("💡 **Demo Mode Active:** Currently evaluating **Human BACE1 (1FKN)** against Alzheimer's therapeutics and reference inhibitors. Toggle off in the sidebar to process custom research data.")
-
-tab1, tab2, tab3 = st.tabs(["🏛️ 3D Active Site Viewer", "💊 ADME-Tox Profiling", "📈 QSAR Activity Prediction"])
+tab1, tab2 = st.tabs(["🏛️ 3D Macromolecule Inspector (SBDD)", "💊 Library Curation & ADME-Tox Engine (LBDD)"])
 
 # --- TAB 1: 3D MOLECULAR VIEWER ---
 with tab1:
-    st.header("Macromolecular Architecture")
+    st.header("Structure-Based Visual Verification")
     if pdb_content:
         col1, col2 = st.columns([3, 1])
         with col2:
@@ -231,15 +197,15 @@ with tab1:
             render_style = st.radio("Receptor Style:", ["cartoon", "surface"], index=0)
             color_scheme = st.selectbox("Coloring Scheme:", ["spectrum", "chain", "secondary structure"], index=0)
             st.markdown("---")
-            st.caption("🔬 **Navigation:**\n* **Rotate:** Left-click + drag\n* **Zoom:** Scroll wheel / Pinch\n* **Active Site:** Green carbon sticks indicate co-crystallized inhibitors.")
+            st.caption("🔬 **Navigation:**\n* **Rotate:** Left-click + drag\n* **Zoom:** Scroll wheel\n* **Active Site:** Green carbon sticks highlight bound heteroatoms/ligands.")
         with col1:
-            components.html(render_3d_pdb(pdb_content, style=render_style, color_by=color_scheme.split()[0]), height=520, width=800)
+            components.html(render_3d_pdb(pdb_content, style=render_style, color_by=color_scheme.split()[0]), height=540, width=800)
     else:
-        st.warning("⚠️ No receptor target loaded. Enable Demo Mode or upload a `.pdb` coordinate file in the sidebar.")
+        st.info("👋 Upload a `.pdb` receptor coordinate file in the sidebar to inspect its 3D architecture, secondary structure, and co-crystallized ligand binding pockets.")
 
 # --- TAB 2: ADME-TOX SCREENING ---
 with tab2:
-    st.header("Cheminformatics & Drug-Likeness Filtering")
+    st.header("Ligand-Based Profiling & Curation")
     if lib_df is not None and not lib_df.empty and "Canonical_SMILES" in lib_df.columns:
         with st.spinner("Computing RDKit ADME descriptors..."):
             adme_results = lib_df["Canonical_SMILES"].apply(calc_adme).apply(pd.Series)
@@ -253,50 +219,11 @@ with tab2:
             col1, col2 = st.columns([1, 4])
             with col1:
                 st.metric(label="Passing Candidates", value=f"{len(filtered_df)} / {len(full_df)}")
+                st.caption("Filtered by Lipinski Rule of 5 and Veber rotational/TPSA thresholds.")
             with col2:
                 st.dataframe(filtered_df, use_container_width=True)
                 
             csv_export = filtered_df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Export Curated Screening Report (.csv)", data=csv_export, file_name="adme_screening_report.csv", mime="text/csv")
+            st.download_button("📥 Export Curated Screening Report (.csv)", data=csv_export, file_name="curated_ligand_library.csv", mime="text/csv", help="Download this clean CSV to feed directly into command-line docking pipelines.")
     else:
-        st.info("👈 Enter drug names in the sidebar (e.g., 'Aspirin, Ibuprofen') or upload a structural library to initiate screening.")
-
-# --- TAB 3: QSAR REGRESSION MODELING ---
-with tab3:
-    st.header("Quantitative Structure-Activity Relationship (QSAR)")
-    train_df = get_training_data()
-    train_adme = train_df["SMILES"].apply(calc_adme).apply(pd.Series)
-    train_df = pd.concat([train_df, train_adme], axis=1)
-    
-    # Train OLS Multivariate Regression
-    X = train_df[["LogP", "TPSA"]].values
-    y = train_df["pIC50"].values
-    X_design = np.column_stack([np.ones(len(X)), X])
-    coeffs, _, _, _ = np.linalg.lstsq(X_design, y, rcond=None)
-    y_pred = X_design @ coeffs
-    r2 = 1 - (np.sum((y - y_pred)**2) / np.sum((y - np.mean(y))**2))
-    
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.markdown("#### Multivariate Regression Model")
-        st.latex(f"pIC_{{50}} = {coeffs[0]:.2f} + ({coeffs[1]:.2f} \\times \\log P) + ({coeffs[2]:.4f} \\times \\text{{TPSA}})")
-        st.metric("Model Fit ($R^2$ Score)", f"{r2:.3f}", help="Indicates the linear variance explained by lipophilicity and polar surface area across benchmark inhibitors.")
-        
-        if lib_df is not None and not lib_df.empty and "Canonical_SMILES" in lib_df.columns:
-            st.markdown("#### Candidate Potency Predictions")
-            screen_adme = lib_df["Canonical_SMILES"].apply(calc_adme).apply(pd.Series)
-            X_screen = np.column_stack([np.ones(len(screen_adme)), screen_adme[["LogP", "TPSA"]].values])
-            lib_df["Predicted_pIC50"] = np.round(X_screen @ coeffs, 2)
-            ranked_lib = pd.concat([lib_df, screen_adme[["LogP", "TPSA", "Drug_Like"]]], axis=1).sort_values(by="Predicted_pIC50", ascending=False)
-            st.dataframe(ranked_lib[["Molecule_Name", "Predicted_pIC50", "LogP", "TPSA", "Drug_Like"]], use_container_width=True)
-            
-    with col2:
-        st.markdown("#### Bioactivity Regression Fit")
-        fig, ax = plt.subplots(figsize=(7, 5))
-        sns.set_style("whitegrid")
-        sns.regplot(x=y, y=y_pred, ax=ax, color="#2b5c8f", scatter_kws={"s": 70}, line_kws={"color": "#d95f02", "label": f"Fit (R² = {r2:.2f})"})
-        ax.set_title("Experimental vs. Predicted pIC50 (BACE1 Benchmark)", fontweight="bold")
-        ax.set_xlabel("Observed pIC50 (-log IC50)")
-        ax.set_ylabel("Predicted pIC50")
-        ax.legend()
-        st.pyplot(fig)
+        st.info("👈 Enter drug names in the sidebar or upload a structural library (.sdf, .mol, .csv) to standardize formats and calculate ADME descriptors.")
