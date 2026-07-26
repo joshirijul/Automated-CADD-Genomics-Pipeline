@@ -83,12 +83,13 @@ def parse_uploaded_ligands(uploaded_file):
     return pd.DataFrame(records)
 
 def fetch_from_pubchem(drug_names_str):
-    """Queries NIH PubChem REST API to auto-fetch canonical SMILES from drug text names."""
+    """Queries NIH PubChem REST API with automated AI spellcheck and typo-correction fallback."""
     names = [n.strip() for n in drug_names_str.split(",") if n.strip()]
     records = []
     for name in names:
+        encoded_name = urllib.parse.quote(name)
         try:
-            encoded_name = urllib.parse.quote(name)
+            # Attempt 1: Direct Exact Name Query
             url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/property/CanonicalSMILES/JSON"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req) as response:
@@ -96,7 +97,30 @@ def fetch_from_pubchem(drug_names_str):
                 smiles = data['PropertyTable']['Properties'][0]['CanonicalSMILES']
                 records.append({"Molecule_Name": name.capitalize(), "Canonical_SMILES": smiles})
         except Exception:
-            st.sidebar.error(f"Could not resolve structure for '{name}' on PubChem.")
+            # Attempt 2: Auto-Spellcheck Fallback for "Average Joe" typos!
+            try:
+                spell_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/spell/suggest/{encoded_name}/JSON"
+                req_spell = urllib.request.Request(spell_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req_spell) as spell_resp:
+                    spell_data = json.loads(spell_resp.read().decode())
+                    suggestions = spell_data.get('Dictionary_Suggest_01', {}).get('SuggestionList', {}).get('Suggestion', [])
+                    
+                    if suggestions:
+                        corrected_name = suggestions[0]
+                        st.toast(f"🪄 Auto-corrected typo '{name}' ➔ '{corrected_name}'!", icon="💡")
+                        
+                        # Retry structure fetch using the corrected chemical name
+                        enc_correct = urllib.parse.quote(corrected_name)
+                        url_retry = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{enc_correct}/property/CanonicalSMILES/JSON"
+                        req_retry = urllib.request.Request(url_retry, headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(req_retry) as retry_resp:
+                            retry_data = json.loads(retry_resp.read().decode())
+                            smiles = retry_data['PropertyTable']['Properties'][0]['CanonicalSMILES']
+                            records.append({"Molecule_Name": f"{corrected_name.capitalize()} (Auto-corrected)", "Canonical_SMILES": smiles})
+                    else:
+                        st.sidebar.error(f"❌ Could not resolve chemical structure for '{name}' on PubChem.")
+            except Exception:
+                st.sidebar.error(f"❌ Could not resolve chemical structure for '{name}' on PubChem.")
     return pd.DataFrame(records)
 
 def render_3d_pdb(pdb_string, style="cartoon", color_by="spectrum"):
