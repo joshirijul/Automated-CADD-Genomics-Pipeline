@@ -1,36 +1,34 @@
-# Automated CADD & Genomics Pipeline: Targeted Virtual Screening & Biomolecular Characterization
+# 🧬 Automated CADD Pre-Processing & Virtual Screening Pipeline
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
-![RDKit](https://img.shields.io/badge/RDKit-Cheminformatics-green)
-![BioPython](https://img.shields.io/badge/BioPython-1.80%2B-yellow)
-![GROMACS](https://img.shields.io/badge/GROMACS-Molecular_Dynamics-orange)
-![AutoDock Vina](https://img.shields.io/badge/AutoDock_Vina-Molecular_Docking-purple)
+An enterprise-grade, hybrid computational biology platform designed for structure-based (SBDD) and ligand-based (LBDD) drug discovery. 
 
-An automated, deterministic, end-to-end computational biology and computer-aided drug design (CADD) pipeline. This repository bridges small-molecule cheminformatics, structural validation, QSAR regression modeling, molecular docking, and thermodynamic system minimization into a modular software architecture.
+This repository bridges the gap between **heavy command-line automation** (for CPU-intensive 3D docking and thermodynamic simulations) and an **interactive web dashboard** (for rapid macromolecular inspection, multi-format chemical standardization, and ADME-Tox library curation).
 
 ---
 
-## 📂 Repository Architecture
+## 🏛️ System Architecture: CLI vs. Web Dashboard
 
-```text
-├── data/                    # Target macromolecule coordinates (1FKN) & raw ligand libraries (.sdf/.mol)
-├── scripts/                 # Python automation engines & headless PyMol rendering macros
-├── results/
-│   ├── alignments/          # Multiple sequence alignments (ClustalW/MUSCLE) & phylogenetic trees
-│   ├── docking/             # AutoDock Vina grid box configurations & prepared .pdbqt structures
-│   ├── md_simulation/       # Solvated periodic box coordinates, topologies, and minimization XVG trajectories
-│   └── reports/             # Curated QSAR datasets, chemical screening CSVs, and publication graphics
-├── environment.yml          # Self-contained Conda environment dependencies
-└── README.md                # Pipeline documentation
+Running 3D grid-search molecular docking (AutoDock Vina) and solvated molecular dynamics minimization (GROMACS) requires intensive, multi-hour CPU compute that cannot run reliably inside a standard web browser. Therefore, this platform is divided into two specialized tiers:
+
+1. **Interactive Web Dashboard (`app.py`):** The pre-processing gateway. Used by bench scientists and researchers to visually validate 3D protein crystal structures, standardize raw ligand files, and filter out toxic candidates via cheminformatics rules *before* expending supercomputer CPU hours.
+2. **Command-Line Backend (`scripts/`):** The heavy-lifting automation engine. Executes high-throughput sequence alignment, active-site topography mapping, automated docking grid generation, and GROMACS thermodynamic system solvation.
+
 ---
 
-## 💻 Full-Stack Interactive Web Dashboard (`app.py`)
+## 💻 Full-Stack Interactive Workbench (`app.py` v3.0)
 
-To make this pipeline accessible to clinicians and bench biologists without command-line experience, the backend scripts are wrapped in a reactive **Streamlit** web application featuring 3D macromolecular rendering via **py3Dmol**.
+A reactive **Streamlit** web application featuring 3D macromolecular rendering via **py3Dmol** and 2D cheminformatics curation via **RDKit**.
 
 ### Key Features:
-* **🏛️ 3D Active Site Viewer:** Interactive rotation, zooming, and surface topography rendering of target protein complexes directly in the browser.
-* **💊 Real-Time ADME Screening:** Dynamic sliders to filter uploaded chemical libraries by Lipinski's Rule of 5 and Veber's drug-likeness criteria on the fly.
-* **📈 Automated QSAR Regression:** Trains OLS regression models on benchmark datasets in real time, projecting predicted $pIC_{50}$ bioactivity scores for uploaded workspace molecules.
+* **🏛️ 3D Macromolecule Inspector (SBDD):** Upload any receptor `.pdb` coordinate file for interactive 3D rotation, zooming, surface rendering, and active-site verification directly in the browser.
+* **💊 Automated Library Curation & ADME-Tox (LBDD):** Standardize raw multi-format chemical libraries (`.sdf`, `.mol`, `.csv`, `.pdb`) on the fly. Computes real-time RDKit descriptors (Molecular Weight, $\log P$, TPSA, Rotatable Bonds) to screen candidates against **Lipinski's Rule of 5** and **Veber's Drug-Likeness Criteria**.
+* **🪄 3-Tier Fault-Tolerant PubChem Fetcher:**
+  1. *Instant Reference Cache:* Bypasses cloud datacenter IP rate-limiting for benchmark therapeutics.
+  2. *Live REST API:* Queries NIH PubChem using NCBI-compliant academic research headers.
+  3. *AI Spellcheck Fallback:* Automatically detects user typos in chemical names (e.g., `"Caffiene"` $\rightarrow$ `"Caffeine"`), queries the PubChem spelling suggestion engine, and resolves the corrected 3D structure seamlessly.
+* **📥 One-Click Export:** Download curated, drug-like screening tables as clean CSVs ready for immediate command-line docking ingestion.
 
-**Launch the Dashboard Locally:**
+### Launch the Dashboard Locally:
+```bash
+conda activate cadd_env
+streamlit run app.py
